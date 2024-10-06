@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from transformer import PositionalEncoding, TransformerLayer
 
-class LanguageModel(nn.Module):  # Ensure it inherits from nn.Module
+class LanguageModel(nn.Module):  # Inherit from nn.Module
     def __init__(self, vocab_size):
         super(LanguageModel, self).__init__()  # Initialize nn.Module
         self.vocab_size = vocab_size
@@ -30,9 +30,10 @@ class UniformLanguageModel(LanguageModel):
 
 
 class NeuralLanguageModel(LanguageModel):  # Inherit from LanguageModel
-    def __init__(self, vocab_size, d_model, d_internal, num_layers, max_seq_len=20):
+    def __init__(self, vocab_size, d_model, d_internal, num_layers, vocab_index, max_seq_len=20):
         super(NeuralLanguageModel, self).__init__(vocab_size)  # Call the base class initializer
         self.d_model = d_model
+        self.vocab_index = vocab_index  # Store vocab_index as an instance variable
 
         # Define layers
         self.embedding = nn.Embedding(vocab_size, d_model)
@@ -53,28 +54,35 @@ class NeuralLanguageModel(LanguageModel):  # Inherit from LanguageModel
         logits = self.output_layer(x)
         return nn.LogSoftmax(dim=-1)(logits)  # Calculate log probabilities here
 
-    def get_next_char_log_probs(self, context, vocab_index):
+    def get_next_char_log_probs(self, context):
         """Get log probabilities for the next character given the context."""
         self.eval()  # Ensure the model is in evaluation mode
         with torch.no_grad():
-            input_indices = torch.LongTensor([vocab_index.index_of(c) for c in context]).unsqueeze(0)
+            input_indices = torch.LongTensor([self.vocab_index.index_of(c) for c in context]).unsqueeze(0)
             log_probs = self.forward(input_indices)
             return log_probs.squeeze(0)[-1].detach().numpy()
 
-    def get_log_prob_sequence(self, next_chars, context, vocab_index):
+    def get_log_prob_sequence(self, next_chars, context):
         """Score a sequence of next characters given a context."""
         log_prob_sum = 0.0
         current_context = context
         for char in next_chars:
-            log_probs = self.get_next_char_log_probs(current_context, vocab_index)
-            char_index = vocab_index.index_of(char)
+            log_probs = self.get_next_char_log_probs(current_context)
+            char_index = self.vocab_index.index_of(char)  # Use stored vocab_index
             log_prob_sum += log_probs[char_index]
             current_context += char  # Update context
         return log_prob_sum
 
 
 def train_lm(args, train_text, dev_text, vocab_index):
-    model = NeuralLanguageModel(vocab_size=len(vocab_index), d_model=128, d_internal=256, num_layers=2, max_seq_len=20)
+    model = NeuralLanguageModel(
+        vocab_size=len(vocab_index),
+        d_model=128,
+        d_internal=256,
+        num_layers=2,
+        vocab_index=vocab_index,  # Pass vocab_index here
+        max_seq_len=20
+    )
     optimizer = optim.Adam(model.parameters(), lr=1e-4)  # Using the custom parameters method
     loss_fn = nn.NLLLoss()
 
