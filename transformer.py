@@ -28,45 +28,155 @@ class LetterCountingExample(object):
 # Should contain your overall Transformer implementation. You will want to use Transformer layer to implement
 # a single layer of the Transformer; this Module will take the raw words as input and do all of the steps necessary
 # to return distributions over the labels (0, 1, or 2).
+# class Transformer(nn.Module):
+#     def __init__(self, vocab_size, num_positions, d_model, d_internal, num_classes, num_layers):
+#         super(Transformer, self).__init__()
+
+#         # Embedding layers
+#         self.embedding = nn.Embedding(vocab_size, d_model)
+#         self.positional_encoding = PositionalEncoding(d_model, num_positions)
+
+#         # Transformer layers
+#         self.layers = nn.ModuleList([TransformerLayer(d_model, d_internal) for _ in range(num_layers)])
+
+#         # Output layer
+#         self.output_layer = nn.Linear(d_model, num_classes)
+#         self.softmax = nn.LogSoftmax(dim=-1)
+
+#     def forward(self, indices):
+#         # Embed the input indices and add positional encodings
+#         x = self.embedding(indices)
+#         x = self.positional_encoding(x)
+
+#         # Pass through the transformer layers
+#         for layer in self.layers:
+#             x = layer(x)
+
+#         # Output layer to predict 0, 1, or 2 classes for each position
+#         output = self.output_layer(x)
+#         log_probs = self.softmax(output)
+
+#         return log_probs
 class Transformer(nn.Module):
     def __init__(self, vocab_size, num_positions, d_model, d_internal, num_classes, num_layers):
-        """
-        :param vocab_size: vocabulary size of the embedding layer
-        :param num_positions: max sequence length that will be fed to the model; should be 20
-        :param d_model: see TransformerLayer
-        :param d_internal: see TransformerLayer
-        :param num_classes: number of classes predicted at the output layer; should be 3
-        :param num_layers: number of TransformerLayers to use; can be whatever you want
-        """
-        super().__init__()
-        raise Exception("Implement me")
+        super(Transformer, self).__init__()
+
+        # Embedding layers
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model, num_positions)
+
+        # Transformer layers
+        self.layers = nn.ModuleList([TransformerLayer(d_model, d_internal) for _ in range(num_layers)])
+
+        # Output layer
+        self.output_layer = nn.Linear(d_model, num_classes)
+        self.softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, indices):
-        """
+        # Embed the input indices and add positional encodings
+        x = self.embedding(indices)
+        x = self.positional_encoding(x)
 
-        :param indices: list of input indices
-        :return: A tuple of the softmax log probabilities (should be a 20x3 matrix) and a list of the attention
-        maps you use in your layers (can be variable length, but each should be a 20x20 matrix)
-        """
-        raise Exception("Implement me")
+        # Store attention maps from each layer
+        attention_maps = []
 
+        # Pass through the transformer layers
+        for layer in self.layers:
+            x, attn_map = layer(x)
+            attention_maps.append(attn_map)
+
+        # Output layer to predict 0, 1, or 2 classes for each position
+        output = self.output_layer(x)
+        log_probs = self.softmax(output)
+
+        # Return log probabilities and attention maps
+        return log_probs, attention_maps
 
 # Your implementation of the Transformer layer goes here. It should take vectors and return the same number of vectors
 # of the same length, applying self-attention, the feedforward layer, etc.
+# class TransformerLayer(nn.Module):
+#     def __init__(self, d_model, d_internal):
+#         super(TransformerLayer, self).__init__()
+#         # Self-attention mechanism
+#         self.query = nn.Linear(d_model, d_internal)
+#         self.key = nn.Linear(d_model, d_internal)
+#         self.value = nn.Linear(d_model, d_internal)
+#         self.softmax = nn.Softmax(dim=-1)
+
+#         # Projection layer to project attention_output back to d_model
+#         self.proj = nn.Linear(d_internal, d_model)
+
+#         # Feed-forward network
+#         self.ffn = nn.Sequential(
+#             nn.Linear(d_model, d_internal),
+#             nn.ReLU(),
+#             nn.Linear(d_internal, d_model)
+#         )
+
+#     def forward(self, input_vecs):
+#         # Self-attention mechanism
+#         queries = self.query(input_vecs)
+#         keys = self.key(input_vecs)
+#         values = self.value(input_vecs)
+
+#         # Compute attention scores
+#         attention_scores = torch.matmul(queries, keys.transpose(-2, -1)) / np.sqrt(queries.shape[-1])
+#         attention_probs = self.softmax(attention_scores)
+
+#         # Compute the attention output
+#         attention_output = torch.matmul(attention_probs, values)
+
+#         # Project attention output back to d_model for residual connection
+#         attention_output = self.proj(attention_output)
+
+#         # Add residual connection and apply feed-forward network
+#         output = attention_output + input_vecs  # Residual connection
+#         output = self.ffn(output)
+
+#         return output
+
 class TransformerLayer(nn.Module):
     def __init__(self, d_model, d_internal):
-        """
-        :param d_model: The dimension of the inputs and outputs of the layer (note that the inputs and outputs
-        have to be the same size for the residual connection to work)
-        :param d_internal: The "internal" dimension used in the self-attention computation. Your keys and queries
-        should both be of this length.
-        """
-        super().__init__()
-        raise Exception("Implement me")
+        super(TransformerLayer, self).__init__()
+        # Self-attention mechanism
+        self.query = nn.Linear(d_model, d_internal)
+        self.key = nn.Linear(d_model, d_internal)
+        self.value = nn.Linear(d_model, d_internal)
+        self.softmax = nn.Softmax(dim=-1)
+
+        # Projection layer to project attention_output back to d_model
+        self.proj = nn.Linear(d_internal, d_model)
+
+        # Feed-forward network
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_internal),
+            nn.ReLU(),
+            nn.Linear(d_internal, d_model)
+        )
 
     def forward(self, input_vecs):
-        raise Exception("Implement me")
+        # Self-attention mechanism
+        queries = self.query(input_vecs)
+        keys = self.key(input_vecs)
+        values = self.value(input_vecs)
 
+        # Compute attention scores
+        attention_scores = torch.matmul(queries, keys.transpose(-2, -1)) / np.sqrt(queries.shape[-1])
+        attention_probs = self.softmax(attention_scores)
+
+        # Compute the attention output
+        attention_output = torch.matmul(attention_probs, values)
+
+        # Project attention output back to d_model for residual connection
+        attention_output = self.proj(attention_output)
+
+        # Add residual connection and apply feed-forward network
+        output = attention_output + input_vecs  # Residual connection
+        output = self.ffn(output)
+
+        # Return the output and attention map for visualization
+        return output, attention_probs
+    
 
 # Implementation of positional encoding that you can use in your network
 class PositionalEncoding(nn.Module):
@@ -102,33 +212,54 @@ class PositionalEncoding(nn.Module):
 
 
 # This is a skeleton for train_classifier: you can implement this however you want
-def train_classifier(args, train, dev):
-    raise Exception("Not fully implemented yet")
+# def train_classifier(args, train, dev):
+#     model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=64, num_classes=3, num_layers=2)
+#     optimizer = optim.Adam(model.parameters(), lr=1e-4)
+#     loss_fcn = nn.NLLLoss()
 
-    # The following code DOES NOT WORK but can be a starting point for your implementation
-    # Some suggested snippets to use:
-    model = Transformer(...)
-    model.zero_grad()
-    model.train()
+#     num_epochs = 10
+#     for epoch in range(num_epochs):
+#         model.train()
+#         total_loss = 0
+#         random.shuffle(train)
+#         for example in train:
+#             optimizer.zero_grad()
+#             log_probs = model(example.input_tensor)
+#             loss = loss_fcn(log_probs, example.output_tensor)
+#             loss.backward()
+#             optimizer.step()
+#             total_loss += loss.item()
+#         print(f"Epoch {epoch + 1}, Loss: {total_loss}")
+
+#     model.eval()
+#     return model
+
+def train_classifier(args, train, dev):
+    model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=64, num_classes=3, num_layers=2)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    loss_fcn = nn.NLLLoss()
 
     num_epochs = 10
-    for t in range(0, num_epochs):
-        loss_this_epoch = 0.0
-        random.seed(t)
-        # You can use batching if you'd like
-        ex_idxs = [i for i in range(0, len(train))]
-        random.shuffle(ex_idxs)
-        loss_fcn = nn.NLLLoss()
-        for ex_idx in ex_idxs:
-            loss = loss_fcn(...) # TODO: Run forward and compute loss
-            # model.zero_grad()
-            # loss.backward()
-            # optimizer.step()
-            loss_this_epoch += loss.item()
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
+        random.shuffle(train)
+        for example in train:
+            optimizer.zero_grad()
+            
+            # Run the model and unpack the log_probs and attention maps
+            log_probs, _ = model(example.input_tensor)  # Ignore attention maps during training
+
+            # Compute the loss using only the log_probs
+            loss = loss_fcn(log_probs, example.output_tensor)
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item()
+        print(f"Epoch {epoch + 1}, Loss: {total_loss}")
+
     model.eval()
     return model
-
 
 ####################################
 # DO NOT MODIFY IN YOUR SUBMISSION #

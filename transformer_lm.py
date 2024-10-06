@@ -1,66 +1,112 @@
-# models.py
-
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from transformer import PositionalEncoding, TransformerLayer
 
-
-class LanguageModel(object):
+class LanguageModel(nn.Module):  # Ensure it inherits from nn.Module
+    def __init__(self, vocab_size):
+        super(LanguageModel, self).__init__()  # Initialize nn.Module
+        self.vocab_size = vocab_size
 
     def get_next_char_log_probs(self, context) -> np.ndarray:
-        """
-        Returns a log probability distribution over the next characters given a context.
-        The log should be base e
-
-        NOTE: You should make sure you call model.eval() to determinize inference here (turns off dropout
-        layers in TransformerEncoder).
-        :param context: the string context that the LM conditions on
-        :return: A numpy vector log P(y | context) where y ranges over the output vocabulary.
-        """
         raise Exception("Only implemented in subclasses")
 
-
     def get_log_prob_sequence(self, next_chars, context) -> float:
-        """
-        Scores a bunch of characters following context. That is, returns
-        log P(nc1, nc2, nc3, ... | context) = log P(nc1 | context) + log P(nc2 | context, nc1), ...
-        The log should be base e
-
-        NOTE: You should make sure you call model.eval() to determinize inference here (turns off dropout
-        layers in TransformerEncoder).
-        :param next_chars:
-        :param context:
-        :return: The float probability
-        """
         raise Exception("Only implemented in subclasses")
 
 
 class UniformLanguageModel(LanguageModel):
     def __init__(self, voc_size):
+        super(UniformLanguageModel, self).__init__(voc_size)  # Call the base class initializer
         self.voc_size = voc_size
 
     def get_next_char_log_probs(self, context):
-        return np.ones([self.voc_size]) * np.log(1.0/self.voc_size)
+        return np.ones([self.voc_size]) * np.log(1.0 / self.voc_size)
 
     def get_log_prob_sequence(self, next_chars, context):
-        return np.log(1.0/self.voc_size) * len(next_chars)
+        return np.log(1.0 / self.voc_size) * len(next_chars)
 
 
-class NeuralLanguageModel(LanguageModel):
-    def __init__(self):
-        raise Exception("Implement me")
+class NeuralLanguageModel(LanguageModel):  # Inherit from LanguageModel
+    def __init__(self, vocab_size, d_model, d_internal, num_layers, max_seq_len=20):
+        super(NeuralLanguageModel, self).__init__(vocab_size)  # Call the base class initializer
+        self.d_model = d_model
 
-    def get_next_char_log_probs(self, context):
-        raise Exception("Implement me")
+        # Define layers
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model, max_seq_len)
+        self.transformer_layers = nn.ModuleList([TransformerLayer(d_model, d_internal) for _ in range(num_layers)])
+        self.output_layer = nn.Linear(d_model, vocab_size)
 
-    def get_log_prob_sequence(self, next_chars, context):
-        raise Exception("Implement me")
+    def forward(self, input_indices):
+        # Embed the input and add positional encodings
+        x = self.embedding(input_indices)
+        x = self.positional_encoding(x)
+
+        # Pass through transformer layers
+        for layer in self.transformer_layers:
+            x, _ = layer(x)  # Ignore attention maps for simplicity
+
+        # Project to the vocabulary size and return log probabilities
+        logits = self.output_layer(x)
+        return nn.LogSoftmax(dim=-1)(logits)  # Calculate log probabilities here
+
+    def get_next_char_log_probs(self, context, vocab_index):
+        """Get log probabilities for the next character given the context."""
+        self.eval()  # Ensure the model is in evaluation mode
+        with torch.no_grad():
+            input_indices = torch.LongTensor([vocab_index.index_of(c) for c in context]).unsqueeze(0)
+            log_probs = self.forward(input_indices)
+            return log_probs.squeeze(0)[-1].detach().numpy()
+
+    def get_log_prob_sequence(self, next_chars, context, vocab_index):
+        """Score a sequence of next characters given a context."""
+        log_prob_sum = 0.0
+        current_context = context
+        for char in next_chars:
+            log_probs = self.get_next_char_log_probs(current_context, vocab_index)
+            char_index = vocab_index.index_of(char)
+            log_prob_sum += log_probs[char_index]
+            current_context += char  # Update context
+        return log_prob_sum
 
 
 def train_lm(args, train_text, dev_text, vocab_index):
-    """
-    :param args: command-line args, passed through here for your convenience
-    :param train_text: train text as a sequence of characters
-    :param dev_text: dev text as a sequence of characters
-    :param vocab_index: an Indexer of the character vocabulary (27 characters)
-    :return: a NeuralLanguageModel instance trained on the given data
-    """
-    raise Exception("Implement me")
+    model = NeuralLanguageModel(vocab_size=len(vocab_index), d_model=128, d_internal=256, num_layers=2, max_seq_len=20)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)  # Using the custom parameters method
+    loss_fn = nn.NLLLoss()
+
+    # Prepare the dataset
+    train_data = [train_text[i:i + 20] for i in range(len(train_text) - 20)]
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+
+    num_epochs = 10
+    for epoch in range(num_epochs):
+        model.train()  # Set model to training mode
+        total_loss = 0
+        for batch in train_loader:
+            optimizer.zero_grad()
+
+            # Convert batch of sequences to indices
+            input_sequences = [torch.LongTensor([vocab_index.index_of(c) for c in seq]) for seq in batch]
+            input_tensor = torch.stack(input_sequences)
+
+            # Shift inputs to predict next characters
+            target_tensor = input_tensor[:, 1:]
+            input_tensor = input_tensor[:, :-1]
+
+            # Run model forward pass
+            log_probs = model(input_tensor)
+
+            # Compute loss
+            loss = loss_fn(log_probs.reshape(-1, len(vocab_index)), target_tensor.reshape(-1))
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+
+        print(f"Epoch {epoch + 1}, Loss: {total_loss}")
+
+    model.eval()  # Set model to evaluation mode
+    return model
