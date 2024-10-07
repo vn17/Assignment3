@@ -113,7 +113,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
     train_data = [train_text[i:i + 20] for i in range(len(train_text) - 20)]
     train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
 
-    num_epochs = 1
+    num_epochs = 10
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
