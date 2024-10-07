@@ -235,7 +235,7 @@ class PositionalEncoding(nn.Module):
 #     return model
 
 def train_classifier(args, train, dev):
-    model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=64, num_classes=3, num_layers=2)
+    model = Transformer(vocab_size=27, num_positions=20, d_model=256, d_internal=64, num_classes=3, num_layers=2)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     loss_fcn = nn.NLLLoss()
 

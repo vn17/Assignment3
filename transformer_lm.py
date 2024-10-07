@@ -100,11 +100,12 @@ class NeuralLanguageModel(LanguageModel):  # Inherit from LanguageModel
 def train_lm(args, train_text, dev_text, vocab_index):
     model = NeuralLanguageModel(
         vocab_size=len(vocab_index),
-        d_model=128,
-        d_internal=256,
-        num_layers=2,
+        d_model=256,
+        
+        =128,
+        num_layers=4,
         vocab_index=vocab_index,
-        max_seq_len=20
+        max_seq_len=30
     )
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     loss_fn = nn.NLLLoss()
