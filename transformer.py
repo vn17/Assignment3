@@ -28,38 +28,10 @@ class LetterCountingExample(object):
 # Should contain your overall Transformer implementation. You will want to use Transformer layer to implement
 # a single layer of the Transformer; this Module will take the raw words as input and do all of the steps necessary
 # to return distributions over the labels (0, 1, or 2).
-# class Transformer(nn.Module):
-#     def __init__(self, vocab_size, num_positions, d_model, d_internal, num_classes, num_layers):
-#         super(Transformer, self).__init__()
-
-#         # Embedding layers
-#         self.embedding = nn.Embedding(vocab_size, d_model)
-#         self.positional_encoding = PositionalEncoding(d_model, num_positions)
-
-#         # Transformer layers
-#         self.layers = nn.ModuleList([TransformerLayer(d_model, d_internal) for _ in range(num_layers)])
-
-#         # Output layer
-#         self.output_layer = nn.Linear(d_model, num_classes)
-#         self.softmax = nn.LogSoftmax(dim=-1)
-
-#     def forward(self, indices):
-#         # Embed the input indices and add positional encodings
-#         x = self.embedding(indices)
-#         x = self.positional_encoding(x)
-
-#         # Pass through the transformer layers
-#         for layer in self.layers:
-#             x = layer(x)
-
-#         # Output layer to predict 0, 1, or 2 classes for each position
-#         output = self.output_layer(x)
-#         log_probs = self.softmax(output)
-
-#         return log_probs
 class Transformer(nn.Module):
     def __init__(self, vocab_size, num_positions, d_model, d_internal, num_classes, num_layers):
         super(Transformer, self).__init__()
+        # print("VNVN Vocab Size: " + vocab_size)
 
         # Embedding layers
         self.embedding = nn.Embedding(vocab_size, d_model)
@@ -75,7 +47,7 @@ class Transformer(nn.Module):
     def forward(self, indices):
         # Embed the input indices and add positional encodings
         x = self.embedding(indices)
-        x = self.positional_encoding(x)
+        # x = self.positional_encoding(x)
 
         # Store attention maps from each layer
         attention_maps = []
@@ -91,49 +63,6 @@ class Transformer(nn.Module):
 
         # Return log probabilities and attention maps
         return log_probs, attention_maps
-
-# Your implementation of the Transformer layer goes here. It should take vectors and return the same number of vectors
-# of the same length, applying self-attention, the feedforward layer, etc.
-# class TransformerLayer(nn.Module):
-#     def __init__(self, d_model, d_internal):
-#         super(TransformerLayer, self).__init__()
-#         # Self-attention mechanism
-#         self.query = nn.Linear(d_model, d_internal)
-#         self.key = nn.Linear(d_model, d_internal)
-#         self.value = nn.Linear(d_model, d_internal)
-#         self.softmax = nn.Softmax(dim=-1)
-
-#         # Projection layer to project attention_output back to d_model
-#         self.proj = nn.Linear(d_internal, d_model)
-
-#         # Feed-forward network
-#         self.ffn = nn.Sequential(
-#             nn.Linear(d_model, d_internal),
-#             nn.ReLU(),
-#             nn.Linear(d_internal, d_model)
-#         )
-
-#     def forward(self, input_vecs):
-#         # Self-attention mechanism
-#         queries = self.query(input_vecs)
-#         keys = self.key(input_vecs)
-#         values = self.value(input_vecs)
-
-#         # Compute attention scores
-#         attention_scores = torch.matmul(queries, keys.transpose(-2, -1)) / np.sqrt(queries.shape[-1])
-#         attention_probs = self.softmax(attention_scores)
-
-#         # Compute the attention output
-#         attention_output = torch.matmul(attention_probs, values)
-
-#         # Project attention output back to d_model for residual connection
-#         attention_output = self.proj(attention_output)
-
-#         # Add residual connection and apply feed-forward network
-#         output = attention_output + input_vecs  # Residual connection
-#         output = self.ffn(output)
-
-#         return output
 
 class TransformerLayer(nn.Module):
     def __init__(self, d_model, d_internal):
@@ -181,58 +110,26 @@ class TransformerLayer(nn.Module):
 # Implementation of positional encoding that you can use in your network
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, num_positions: int=20, batched=False):
-        """
-        :param d_model: dimensionality of the embedding layer to your model; since the position encodings are being
-        added to character encodings, these need to match (and will match the dimension of the subsequent Transformer
-        layer inputs/outputs)
-        :param num_positions: the number of positions that need to be encoded; the maximum sequence length this
-        module will see
-        :param batched: True if you are using batching, False otherwise
-        """
         super().__init__()
-        # Dict size
         self.emb = nn.Embedding(num_positions, d_model)
         self.batched = batched
 
     def forward(self, x):
         """
-        :param x: If using batching, should be [batch size, seq len, embedding dim]. Otherwise, [seq len, embedding dim]
+        :param x: [batch_size, seq_len, embedding_dim] if batched
+                  [seq_len, embedding_dim] otherwise
         :return: a tensor of the same size with positional embeddings added in
         """
-        # Second-to-last dimension will always be sequence length
-        input_size = x.shape[-2]
-        indices_to_embed = torch.tensor(np.asarray(range(0, input_size))).type(torch.LongTensor)
+        seq_len = x.shape[-2]  # Second-to-last dimension is the sequence length
+        indices_to_embed = torch.arange(seq_len).type(torch.LongTensor).to(x.device)
+        
         if self.batched:
-            # Use unsqueeze to form a [1, seq len, embedding dim] tensor -- broadcasting will ensure that this
-            # gets added correctly across the batch
-            emb_unsq = self.emb(indices_to_embed).unsqueeze(0)
-            return x + emb_unsq
+            # Add positional encoding to each sequence in the batch
+            emb = self.emb(indices_to_embed).unsqueeze(0)  # [1, seq_len, d_model]
+            return x + emb
         else:
+            # print("VNVN Indices: " + str(indices_to_embed.shape))
             return x + self.emb(indices_to_embed)
-
-
-# This is a skeleton for train_classifier: you can implement this however you want
-# def train_classifier(args, train, dev):
-#     model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=64, num_classes=3, num_layers=2)
-#     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-#     loss_fcn = nn.NLLLoss()
-
-#     num_epochs = 10
-#     for epoch in range(num_epochs):
-#         model.train()
-#         total_loss = 0
-#         random.shuffle(train)
-#         for example in train:
-#             optimizer.zero_grad()
-#             log_probs = model(example.input_tensor)
-#             loss = loss_fcn(log_probs, example.output_tensor)
-#             loss.backward()
-#             optimizer.step()
-#             total_loss += loss.item()
-#         print(f"Epoch {epoch + 1}, Loss: {total_loss}")
-
-#     model.eval()
-#     return model
 
 def train_classifier(args, train, dev):
     model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=64, num_classes=3, num_layers=2)
